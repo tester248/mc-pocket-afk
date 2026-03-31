@@ -27,3 +27,15 @@ Backend defaults:
 - Health: `http://localhost:8080/healthz`
 
 Protocol reference: [docs/API_SPEC.md](docs/API_SPEC.md)
+
+## Mobile Quick Start
+
+```bash
+cd mobile
+npm install
+cp .env.example .env
+npm run start
+```
+
+Environment variables:
+- `EXPO_PUBLIC_BACKEND_WS_URL` default backend WebSocket URL shown in the control app.
