@@ -127,6 +127,7 @@ export interface VersionResolutionEvent {
   requestedVersion?: string;
   resolvedVersion: string;
   source: VersionResolutionSource;
+  tested: boolean;
   detectedVersionName?: string;
   detectedProtocol?: number;
   warning?: string;

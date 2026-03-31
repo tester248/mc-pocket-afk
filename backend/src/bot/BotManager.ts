@@ -81,6 +81,7 @@ export class BotManager {
       requestedVersion: versionResolution.requestedVersion,
       resolvedVersion: versionResolution.resolvedVersion,
       source: versionResolution.source,
+      tested: versionResolution.tested,
       detectedVersionName: versionResolution.detectedVersionName,
       detectedProtocol: versionResolution.detectedProtocol,
       warning: versionResolution.warning,

@@ -240,6 +240,7 @@ Chat is forwarded as plain text to reduce payload size.
   "requestedVersion": "1.20.4",
   "resolvedVersion": "1.20.4",
   "source": "requested",
+  "tested": false,
   "detectedVersionName": "Paper 1.20.4",
   "detectedProtocol": 765,
   "warning": "Requested version '1.20.4' is not in the supported version list; attempting anyway."
@@ -248,6 +249,11 @@ Chat is forwarded as plain text to reduce payload size.
 
 Field notes:
 - `source` can be `requested`, `detected`, or `default`.
+- `tested` indicates whether `resolvedVersion` is in the backend tested matrix.
 - `requestedVersion` is present when app explicitly provided a version.
 - `detectedVersionName` and `detectedProtocol` are present when backend ping detection succeeds.
 - `warning` is present when backend had to fallback or continue with best-effort behavior.
+
+Current tested matrix behavior:
+- Backend currently marks only the runtime default version as tested.
+- Non-tested versions are still allowed, but `tested` will be `false` and `warning` will indicate best-effort mode.

@@ -6,6 +6,7 @@ export interface VersionResolution {
   requestedVersion?: string;
   resolvedVersion: string;
   source: VersionResolutionSource;
+  tested: boolean;
   detectedVersionName?: string;
   detectedProtocol?: number;
   warning?: string;
@@ -13,8 +14,39 @@ export interface VersionResolution {
 
 export const SUPPORTED_VERSIONS = [...minecraftProtocol.supportedVersions];
 export const DEFAULT_VERSION = minecraftProtocol.defaultVersion;
+export const TESTED_VERSIONS = [DEFAULT_VERSION];
 
 const sortedSupportedVersions = [...SUPPORTED_VERSIONS].sort((a, b) => b.length - a.length);
+
+const appendWarning = (current: string | undefined, addition: string): string => {
+  if (!current) {
+    return addition;
+  }
+
+  return `${current} ${addition}`;
+};
+
+export const isTestedVersion = (version: string): boolean => {
+  return TESTED_VERSIONS.includes(version);
+};
+
+const applyTestedPolicy = (
+  resolution: Omit<VersionResolution, "tested">,
+): VersionResolution => {
+  const tested = isTestedVersion(resolution.resolvedVersion);
+  const warning = tested
+    ? resolution.warning
+    : appendWarning(
+        resolution.warning,
+        `Resolved version '${resolution.resolvedVersion}' is outside tested matrix (${TESTED_VERSIONS.join(", ")}); running best-effort.`,
+      );
+
+  return {
+    ...resolution,
+    tested,
+    warning,
+  };
+};
 
 const normalizeVersion = (raw: string | undefined): string | undefined => {
   if (!raw) {
@@ -102,19 +134,19 @@ export const resolveRequestedVersion = (requestedVersion: string | undefined): V
   }
 
   if (SUPPORTED_VERSIONS.includes(normalizedRequested)) {
-    return {
+    return applyTestedPolicy({
       requestedVersion: normalizedRequested,
       resolvedVersion: normalizedRequested,
       source: "requested",
-    };
+    });
   }
 
-  return {
+  return applyTestedPolicy({
     requestedVersion: normalizedRequested,
     resolvedVersion: normalizedRequested,
     source: "requested",
     warning: `Requested version '${normalizedRequested}' is not in the supported version list; attempting anyway.`,
-  };
+  });
 };
 
 export const resolveConnectVersion = async (config: ConnectConfig): Promise<VersionResolution> => {
@@ -139,30 +171,30 @@ export const resolveConnectVersion = async (config: ConnectConfig): Promise<Vers
       : null;
 
     if (matchedVersion) {
-      return {
+      return applyTestedPolicy({
         resolvedVersion: matchedVersion,
         source: "detected",
         detectedVersionName,
         detectedProtocol,
-      };
+      });
     }
 
     const warning = detectedVersionName
       ? `Detected server version '${detectedVersionName}' does not match supported versions; falling back to default '${DEFAULT_VERSION}'.`
       : `Server version detection did not return a usable version; falling back to default '${DEFAULT_VERSION}'.`;
 
-    return {
+    return applyTestedPolicy({
       resolvedVersion: DEFAULT_VERSION,
       source: "default",
       detectedVersionName,
       detectedProtocol,
       warning,
-    };
+    });
   } catch (error) {
-    return {
+    return applyTestedPolicy({
       resolvedVersion: DEFAULT_VERSION,
       source: "default",
       warning: `Version auto-detection failed (${toErrorMessage(error)}); falling back to default '${DEFAULT_VERSION}'.`,
-    };
+    });
   }
 };
