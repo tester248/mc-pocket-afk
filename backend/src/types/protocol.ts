@@ -21,32 +21,41 @@ export interface ConnectConfig {
   authMode: AuthMode;
   username?: string;
   autoCommand?: string;
+  reconnectMaxAttempts?: number;
+  versionPingTimeoutMs?: number;
+  msaLoginTimeoutMs?: number;
+  fabricHandshakeTimeoutMs?: number;
   fabricProfile?: FabricProfile;
 }
 
 export interface ConnectAction {
   action: "connect";
   config: ConnectConfig;
+  sessionId?: string; // optional; if not provided, server generates one
 }
 
 export interface DisconnectAction {
   action: "disconnect";
   reason?: string;
+  sessionId?: string;
 }
 
 export interface ChatAction {
   action: "chat";
   text: string;
+  sessionId?: string;
 }
 
 export interface StartAfkAction {
   action: "start_afk";
   type: AntiAfkMode;
+  sessionId?: string;
 }
 
 export interface StopAfkAction {
   action: "stop_afk";
   type?: AntiAfkMode;
+  sessionId?: string;
 }
 
 export interface PingAction {
@@ -73,22 +82,26 @@ export interface StatusEvent {
   event: "status";
   state: ConnectionState;
   message?: string;
+  sessionId?: string;
 }
 
 export interface ChatEvent {
   event: "chat";
   text: string;
+  sessionId?: string;
 }
 
 export interface ErrorEvent {
   event: "error";
   message: string;
+  sessionId?: string;
 }
 
 export interface AckEvent {
   event: "ack";
   action: string;
   message?: string;
+  sessionId?: string;
 }
 
 export interface MsaCodeEvent {
@@ -112,6 +125,12 @@ export interface ReconnectScheduledEvent {
   event: "reconnect_scheduled";
   attempt: number;
   delayMs: number;
+  reason: string;
+}
+
+export interface ReconnectExhaustedEvent {
+  event: "reconnect_exhausted";
+  attempts: number;
   reason: string;
 }
 
@@ -142,6 +161,7 @@ export type ServerEvent =
   | AfkStateEvent
   | VitalsEvent
   | ReconnectScheduledEvent
+  | ReconnectExhaustedEvent
   | PongEvent
   | VersionResolutionEvent;
 

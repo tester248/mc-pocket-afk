@@ -43,6 +43,7 @@ export default function DashboardScreen({ route, navigation }: { route: Dashboar
   const [msaCode, setMsaCode] = useState<string | null>(null);
   const [msaVerificationUri, setMsaVerificationUri] = useState<string | null>(null);
   const [showMsaModal, setShowMsaModal] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
 
@@ -105,6 +106,10 @@ export default function DashboardScreen({ route, navigation }: { route: Dashboar
         setShowMsaModal(true);
         log(`MSA Code: ${data.code}`);
       }
+      if (data.event === 'ack' && data.action === 'connect' && data.sessionId) {
+        setSessionId(data.sessionId);
+        log(`Session created: ${data.sessionId}`);
+      }
     };
 
     ws.onclose = () => {
@@ -120,21 +125,22 @@ export default function DashboardScreen({ route, navigation }: { route: Dashboar
 
   const disconnect = () => {
     if (socketRef.current) {
-      socketRef.current.send(JSON.stringify({ action: 'disconnect' }));
+      socketRef.current.send(JSON.stringify({ action: 'disconnect', ...(sessionId ? { sessionId } : {}) }));
       socketRef.current.close();
+      setSessionId(null);
     }
   };
 
   const sendChat = () => {
     if (!socketRef.current || !chatText) return;
-    socketRef.current.send(JSON.stringify({ action: 'chat', text: chatText }));
+    socketRef.current.send(JSON.stringify({ action: 'chat', text: chatText, ...(sessionId ? { sessionId } : {}) }));
     log(`Me: ${chatText}`);
     setChatText('');
   };
 
   const sendAfk = (mode: AfkMode) => {
     if (!socketRef.current) return;
-    socketRef.current.send(JSON.stringify({ action: 'start_afk', mode }));
+    socketRef.current.send(JSON.stringify({ action: 'start_afk', type: mode, ...(sessionId ? { sessionId } : {}) }));
     log(`AFK Mode: ${mode}`);
   };
 

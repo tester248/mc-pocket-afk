@@ -1,14 +1,16 @@
 import { createServer, type Server as HttpServer } from "node:http";
+import { randomUUID } from "node:crypto";
 
 import WebSocket, { WebSocketServer } from "ws";
 
-import { BotManager } from "../bot/BotManager";
+import { BotManager, type BotManagerOptions } from "../bot/BotManager";
 import { parseClientAction } from "./parsers";
 import { type ClientAction, type ServerEvent } from "../types/protocol";
 
 interface WSServerOptions {
   host: string;
   port: number;
+  botDefaults?: Partial<BotManagerOptions>;
 }
 
 const sendJson = (socket: WebSocket, event: ServerEvent): void => {
@@ -29,8 +31,10 @@ const toErrorMessage = (error: unknown): string => {
 export class MCPocketAFKWebSocketServer {
   private readonly httpServer: HttpServer;
   private readonly wsServer: WebSocketServer;
+  private readonly botDefaults: Partial<BotManagerOptions>;
 
   public constructor(private readonly options: WSServerOptions) {
+    this.botDefaults = options.botDefaults ?? {};
     this.httpServer = createServer((request, response) => {
       if (request.url === "/healthz") {
         response.writeHead(200, { "content-type": "application/json" });
@@ -47,11 +51,8 @@ export class MCPocketAFKWebSocketServer {
 
   public async start(): Promise<void> {
     this.wsServer.on("connection", (socket) => {
-      const manager = new BotManager({
-        onEvent: (event) => {
-          sendJson(socket, event);
-        },
-      });
+      // Map of sessionId -> BotManager for multi-session support
+      const managers = new Map<string, BotManager>();
 
       sendJson(socket, {
         event: "status",
@@ -72,11 +73,15 @@ export class MCPocketAFKWebSocketServer {
           return;
         }
 
-        void this.handleAction(socket, manager, action);
+        void this.handleAction(socket, managers, action);
       });
 
       socket.on("close", () => {
-        void manager.disconnect("ws_client_closed");
+        // Disconnect all sessions when client disconnects
+        for (const manager of managers.values()) {
+          void manager.disconnect("ws_client_closed");
+        }
+        managers.clear();
       });
 
       socket.on("error", (error) => {
@@ -113,28 +118,61 @@ export class MCPocketAFKWebSocketServer {
 
   private async handleAction(
     socket: WebSocket,
-    manager: BotManager,
+    managers: Map<string, BotManager>,
     action: ClientAction,
   ): Promise<void> {
     try {
-      switch (action.action) {
-        case "connect": {
-          await manager.connect(action.config);
-          sendJson(socket, { event: "ack", action: "connect", message: "Connect request accepted." });
-          break;
+      // For connect, generate a sessionId if not provided
+      if (action.action === "connect") {
+        const sessionId = action.sessionId ?? randomUUID();
+        const manager = new BotManager({
+          onEvent: (event) => {
+            sendJson(socket, { ...event, sessionId });
+          },
+        }, this.botDefaults);
+        managers.set(sessionId, manager);
+
+        await manager.connect(action.config);
+        sendJson(socket, { event: "ack", action: "connect", message: "Connect request accepted.", sessionId });
+        return;
+      }
+
+      // For other actions, sessionId must be provided or default to first/only manager
+      let sessionId = action.sessionId;
+      if (!sessionId) {
+        // If no sessionId provided and there's only one manager, use it
+        if (managers.size === 1) {
+          sessionId = managers.keys().next().value;
+        } else if (managers.size === 0) {
+          sendJson(socket, { event: "error", message: "No active sessions. Use connect action first." });
+          return;
+        } else {
+          sendJson(socket, { event: "error", message: "Multiple sessions active. sessionId is required." });
+          return;
         }
+      }
+
+      const manager = managers.get(sessionId);
+      if (!manager) {
+        sendJson(socket, { event: "error", message: `Session '${sessionId}' not found.`, sessionId });
+        return;
+      }
+
+      switch (action.action) {
         case "disconnect": {
           await manager.disconnect(action.reason ?? "client_requested");
           sendJson(socket, {
             event: "ack",
             action: "disconnect",
             message: "Disconnect request processed.",
+            sessionId,
           });
+          managers.delete(sessionId);
           break;
         }
         case "chat": {
           if (!action.text.trim()) {
-            sendJson(socket, { event: "error", message: "Chat text cannot be empty." });
+            sendJson(socket, { event: "error", message: "Chat text cannot be empty.", sessionId });
             return;
           }
 
@@ -143,6 +181,7 @@ export class MCPocketAFKWebSocketServer {
             event: "ack",
             action: "chat",
             message: "Chat sent to server.",
+            sessionId,
           });
           break;
         }
@@ -152,6 +191,7 @@ export class MCPocketAFKWebSocketServer {
             event: "ack",
             action: "start_afk",
             message: `Anti-AFK mode '${action.type}' started.`,
+            sessionId,
           });
           break;
         }
@@ -163,15 +203,16 @@ export class MCPocketAFKWebSocketServer {
             message: action.type
               ? `Anti-AFK mode '${action.type}' stopped.`
               : "All Anti-AFK modes stopped.",
+            sessionId,
           });
           break;
         }
         case "ping": {
-          sendJson(socket, { event: "pong", ts: Date.now() });
+          sendJson(socket, { event: "pong", ts: Date.now(), sessionId });
           break;
         }
         default:
-          sendJson(socket, { event: "error", message: "Unsupported action." });
+          sendJson(socket, { event: "error", message: "Unsupported action.", sessionId });
       }
     } catch (error) {
       sendJson(socket, { event: "error", message: `Action failed: ${toErrorMessage(error)}` });
