@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+
+APP_HOME="$(cd "$(dirname "$0")" && pwd)"
+APP_NAME="Gradle"
+APP_BASE_NAME=${0##*/}
+
+exec java -Xmx2g -jar "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" "$@"

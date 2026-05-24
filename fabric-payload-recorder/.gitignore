@@ -1,0 +1,37 @@
+# Gradle
+.gradle/
+build/
+gradle-app.setting
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+*.code-workspace
+
+# Java
+*.class
+*.jar
+*.jar.original
+*.jar.in.progress
+*.lock
+
+# Output
+fabric-profile.json
+run/
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Project
+.project
+.classpath
+.factorypath

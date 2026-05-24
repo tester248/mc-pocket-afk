@@ -1,0 +1,12 @@
+{
+  "config_version": 1,
+  "package": "com.example.payloadrecorder.mixin",
+  "enviroment": "client",
+  "mixins": [],
+  "client": [
+    "CustomPayloadS2CPacketMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
