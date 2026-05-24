@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
+import { Linking } from 'react-native';
 import {
   View,
   Text,
@@ -8,6 +9,7 @@ import {
   TextInput,
   TouchableOpacity,
   Switch,
+  Modal,
 } from 'react-native';
 import { NavigationRouteProp } from '@react-navigation/native';
 import { RouteProp } from '@react-navigation/stack';
@@ -38,6 +40,9 @@ export default function DashboardScreen({ route, navigation }: { route: Dashboar
   const [botState, setBotState] = useState('idle');
   const [chatText, setChatText] = useState('');
   const [events, setEvents] = useState<string[]>([]);
+  const [msaCode, setMsaCode] = useState<string | null>(null);
+  const [msaVerificationUri, setMsaVerificationUri] = useState<string | null>(null);
+  const [showMsaModal, setShowMsaModal] = useState(false);
 
   const socketRef = useRef<WebSocket | null>(null);
 
@@ -94,6 +99,12 @@ export default function DashboardScreen({ route, navigation }: { route: Dashboar
       const data = JSON.parse(e.data);
       log(JSON.stringify(data));
       if (data.event === 'bot_state') setBotState(data.state);
+      if (data.event === 'msa_code') {
+        setMsaCode(data.code);
+        setMsaVerificationUri(data.verificationUri);
+        setShowMsaModal(true);
+        log(`MSA Code: ${data.code}`);
+      }
     };
 
     ws.onclose = () => {
@@ -127,9 +138,38 @@ export default function DashboardScreen({ route, navigation }: { route: Dashboar
     log(`AFK Mode: ${mode}`);
   };
 
+  const openVerificationUrl = async () => {
+    if (msaVerificationUri) {
+      try {
+        await Linking.openURL(msaVerificationUri);
+        log('Verification URL opened in browser');
+      } catch (e) {
+        log('Could not open verification URL');
+      }
+    }
+  };
+
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>{profile.host}</Text>
+    <>
+      <Modal visible={showMsaModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Microsoft Login Required</Text>
+            <Text style={styles.modalText}>Enter this code at microsoft.com/link:</Text>
+            <View style={styles.codeBox}>
+              <Text style={styles.codeText}>{msaCode}</Text>
+            </View>
+            <TouchableOpacity style={styles.modalButton} onPress={openVerificationUrl}>
+              <Text style={styles.modalButtonText}>Open Verification URL</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.modalButton, styles.modalButtonSecondary]} onPress={() => setShowMsaModal(false)}>
+              <Text style={styles.modalButtonText}>Dismiss</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+      <ScrollView style={styles.container}>
+        <Text style={styles.title}>{profile.host}</Text>
       
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Connection Settings</Text>
@@ -203,10 +243,20 @@ export default function DashboardScreen({ route, navigation }: { route: Dashboar
         </View>
       </View>
     </ScrollView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: 'white', borderRadius: 15, padding: 25, width: '80%', alignItems: 'center' },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 15, color: '#333' },
+  modalText: { fontSize: 14, textAlign: 'center', marginBottom: 15, color: '#666' },
+  codeBox: { backgroundColor: '#f0f0f0', borderRadius: 8, padding: 15, marginBottom: 20, width: '100%', alignItems: 'center', borderWidth: 2, borderColor: '#007AFF' },
+  codeText: { fontSize: 32, fontWeight: 'bold', color: '#007AFF', letterSpacing: 2 },
+  modalButton: { backgroundColor: '#007AFF', paddingHorizontal: 30, paddingVertical: 12, borderRadius: 8, marginBottom: 10, width: '100%', alignItems: 'center' },
+  modalButtonSecondary: { backgroundColor: '#ccc' },
+  modalButtonText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
   container: { flex: 1, padding: 20, backgroundColor: '#f5f5f5' },
   title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, marginTop: 40, textAlign: 'center' },
   section: { backgroundColor: 'white', padding: 15, borderRadius: 10, marginBottom: 20, elevation: 2 },
