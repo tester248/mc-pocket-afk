@@ -1,11 +1,29 @@
-# MCPocketAFK WebSocket API (Backend v0.1)
+# MCPocketAFK WebSocket API (Backend v0.2)
 
-This document defines the current command and event contract between the mobile app and backend.
+This document defines the command and event contract between the mobile app and backend.
 
 ## Connection
 
 - WebSocket endpoint: `ws://<host>:<port>/`
 - Health endpoint: `http://<host>:<port>/healthz`
+
+## Multi-Session Support (v0.2+)
+
+The backend supports multiple concurrent bot sessions per client connection via `sessionId`. This enables a single WebSocket connection to manage multiple simultaneous bot instances.
+
+### Session Lifecycle
+
+1. **Connect**: Client sends `connect` action without `sessionId` → server generates a UUID and returns it in the ack response.
+2. **Use Session**: Client includes the `sessionId` in subsequent actions (`chat`, `start_afk`, `stop_afk`, etc.).
+3. **Auto-Routing**: Events from that session are tagged with the same `sessionId` for client-side routing.
+4. **Disconnect**: Client sends `disconnect` with the `sessionId` to close that specific session.
+5. **Cleanup**: When the WebSocket closes, all sessions are automatically disconnected.
+
+### Backwards Compatibility
+
+- If `sessionId` is omitted and only one session exists, the backend assumes that session.
+- If `sessionId` is omitted and multiple sessions exist, the backend returns an error.
+- Clients using a single session do not need to supply `sessionId`.
 
 ## Auth Ownership
 
@@ -27,9 +45,13 @@ The backend accepts either `action` or `command` as the command key.
     "authMode": "cracked",
     "username": "PocketBot",
     "autoCommand": "/login mypassword"
-  }
+  },
+  "sessionId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
+
+- `sessionId`: optional UUID string. If omitted, server generates one and returns it in the ack response.
+- All other fields as before.
 
 Shortcut payload (also supported):
 
@@ -77,18 +99,24 @@ Fabric behavior:
 ```json
 {
   "action": "disconnect",
-  "reason": "user_requested"
+  "reason": "user_requested",
+  "sessionId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
+
+- `sessionId`: optional (required if multiple sessions are active).
 
 ### `chat`
 
 ```json
 {
   "action": "chat",
-  "text": "/tpa Steve"
+  "text": "/tpa Steve",
+  "sessionId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
+
+- `sessionId`: optional (required if multiple sessions are active).
 
 Compatibility format:
 
@@ -120,21 +148,28 @@ Compatibility format:
 ```json
 {
   "action": "stop_afk",
-  "type": "fish"
+  "type": "fish",
+  "sessionId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
-If `type` is omitted, all AFK modes are stopped.
+- `type`: optional specific AFK mode to stop; if omitted, all modes are stopped.
+- `sessionId`: optional (required if multiple sessions are active).
 
 ### `ping`
 
 ```json
 {
-  "action": "ping"
+  "action": "ping",
+  "sessionId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
+- `sessionId`: optional.
+
 ## Outbound Events (Backend -> App)
+
+All events now include an optional `sessionId` field for client-side routing in multi-session scenarios.
 
 ### `status`
 
@@ -142,7 +177,8 @@ If `type` is omitted, all AFK modes are stopped.
 {
   "event": "status",
   "state": "connected",
-  "message": "Bot spawned successfully."
+  "message": "Bot spawned successfully.",
+  "sessionId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -159,7 +195,8 @@ If `type` is omitted, all AFK modes are stopped.
 {
   "event": "ack",
   "action": "chat",
-  "message": "Chat sent to server."
+  "message": "Chat sent to server.",
+  "sessionId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -168,7 +205,8 @@ If `type` is omitted, all AFK modes are stopped.
 ```json
 {
   "event": "error",
-  "message": "Action failed: Bot is not connected."
+  "message": "Action failed: Bot is not connected.",
+  "sessionId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -222,6 +260,18 @@ Chat is forwarded as plain text to reduce payload size.
   "reason": "end:socket closed"
 }
 ```
+
+### `reconnect_exhausted`
+
+```json
+{
+  "event": "reconnect_exhausted",
+  "attempts": 10,
+  "reason": "reconnect_failed"
+}
+```
+
+Emitted when the backend reaches the maximum reconnect attempts and will stop retrying.
 
 ### `pong`
 
