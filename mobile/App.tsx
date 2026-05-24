@@ -1,103 +1,18 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef, useState } from "react";
-import {
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
-
-type AuthMode = "cracked" | "premium";
-type AfkMode = "all" | "swing" | "look" | "jump" | "fish";
-type SocketState = "disconnected" | "connecting" | "connected";
-
-interface MobileProfile {
-  backendUrl: string;
-  host: string;
-  port: string;
-  authMode: AuthMode;
-  username: string;
-  version: string;
-  autoCommand: string;
-}
-
-interface VersionResolutionState {
-  source?: string;
-  resolvedVersion?: string;
-  tested?: boolean;
-  warning?: string;
-}
-
-const STORAGE_KEY = "mcpocketafk.mobile.profile.v1";
-const DEFAULT_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_WS_URL ?? "ws://localhost:8080";
-
-const DEFAULT_PROFILE: MobileProfile = {
-  backendUrl: DEFAULT_BACKEND_URL,
-  host: "",
-  port: "25565",
-  authMode: "cracked",
-  username: "",
-  version: "",
-  autoCommand: "",
-};
-
-const appendWithLimit = (items: string[], next: string): string[] => {
-  const capped = [...items, next];
-  if (capped.length <= 140) {
-    return capped;
-  }
-
-  return capped.slice(capped.length - 140);
-};
-
-const ActionButton = ({
-  label,
-  onPress,
-  variant = "primary",
-}: {
-  label: string;
-  onPress: () => void;
-  variant?: "primary" | "secondary" | "danger";
-}) => {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[
-        styles.button,
-        variant === "secondary" ? styles.buttonSecondary : undefined,
-        variant === "danger" ? styles.buttonDanger : undefined,
-      ]}
-    >
-      <Text style={styles.buttonText}>{label}</Text>
-    </TouchableOpacity>
-  );
-};
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import AppNavigator from './src/navigation/AppNavigator';
 
 export default function App() {
-  const [profile, setProfile] = useState<MobileProfile>(DEFAULT_PROFILE);
-  const [socketState, setSocketState] = useState<SocketState>("disconnected");
-  const [botState, setBotState] = useState("idle");
-  const [keepAliveEnabled, setKeepAliveEnabled] = useState(true);
-  const [chatText, setChatText] = useState("");
-  const [versionResolution, setVersionResolution] = useState<VersionResolutionState>({});
-  const [events, setEvents] = useState<string[]>([]);
+  return (
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <AppNavigator />
+      </NavigationContainer>
+    </SafeAreaProvider>
+  );
+}
 
-  const socketRef = useRef<WebSocket | null>(null);
-  const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const log = (message: string): void => {
-    const stamp = new Date().toLocaleTimeString();
-    setEvents((prev) => appendWithLimit(prev, `[${stamp}] ${message}`));
-  };
-
-  const setProfileField = (key: keyof MobileProfile, value: string): void => {
-    setProfile((prev) => ({ ...prev, [key]: value }));
-  };
 
   const stopPinger = (): void => {
     if (pingIntervalRef.current) {
@@ -162,6 +77,12 @@ export default function App() {
         const resolved = typeof event.resolvedVersion === "string" ? event.resolvedVersion : "?";
         const tested = typeof event.tested === "boolean" ? event.tested : false;
         log(`VERSION ${resolved} (${tested ? "tested" : "best-effort"})`);
+        break;
+      }
+      case "reconnect_exhausted": {
+        const attempts = typeof event.attempts === "number" ? event.attempts : 0;
+        const reason = typeof event.reason === "string" ? ` (${event.reason})` : "";
+        log(`RECONNECT EXHAUSTED after ${attempts} attempts${reason}`);
         break;
       }
       case "msa_code": {
