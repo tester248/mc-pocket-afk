@@ -1,0 +1,10 @@
+{
+  "gameVersion": "1.20.4",
+  "registerPayloadBase64": "dGVzdF9yZWdpc3Rlcl9wYXlsb2Fk", // "test_register_payload" base64 example
+  "channels": [
+    {
+      "channel": "fabric:example_channel",
+      "dataBase64": "dGVzdF9jaGFubmVsX3BheWxvYWQ=" // "test_channel_payload" base64 example
+    }
+  ]
+}
